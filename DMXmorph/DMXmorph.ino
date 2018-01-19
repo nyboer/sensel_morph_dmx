@@ -38,18 +38,30 @@ SenselFrame frame;
 //Whether the Sensel device has been initialized
 bool sensel_ready = false;
 
-const long interval = 33; // interval at which to record and play scenes (milliseconds)
-unsigned long pvs_ms = 0; 
-
 //for interpolation routines
 const float Pi = 3.14159265359;
 const float Segcount = 16;
+const float Wheel_Radius = 57.5;
+const float Force_Thresh = 500.;
+const float Force_Max = 1100.;
 //centers of color wheels on left and right
 //array of coords for centers of color wheels left and right:
 float centers[2][2] = { {60,60},{180,60} };
 float interpolation = 0.;
 int seg_id = 0;
 int newcolor[3] = {0,0,0};
+
+//for scene recording and playback
+const int max_frames = 150; //number of events to record
+const long interval = 33; // interval at which to record and play scenes (milliseconds)
+unsigned long pvs_ms = 0; 
+int recording = 0;
+int framecount = 0;
+int scene_buffer[max_frames][5] = {}; //maximum of 150 events to record into scene
+int scene_start = 0; //
+int scene_end = max_frames;
+
+
 
 //takes coordinates from morph, 
 //provides a radial segment ID (angle in range of 0-15)
@@ -80,9 +92,10 @@ float distance(float x1, float y1, float x2, float y2){
   return dist;
 }
 
-//scale distance 0-57.5 to 0-127 for brightness
+//scale distance 0-Wheel_Radius to 0-127 for brightness
 int brightness(float d){
-  float fbright =  d * (127/57.5);
+  float fbright =  d * (127/Wheel_Radius);
+  //clip the value sent to DMX
   if(fbright>127){
     fbright = 127;
   }
@@ -91,14 +104,15 @@ int brightness(float d){
 }
 //scale force 500-1100 to 128-250 for brightness
 int strobe(float z){
-    float fstrobe =  128 + ( (z-500.) * (122./600.) );
+  float frange = Force_Max - Force_Thresh;
+  float fstrobe =  128 + ( (z-Force_Thresh) * (122./frange) );
+  //clip the value sent to DMX
   if(fstrobe>250){
     fstrobe = 250;
   }
   int strobe_time = (int) fstrobe;
   return strobe_time;
 }
-
 
 //linear interp c = a + (b-a)*t
 //should probably protect against size of 0!
@@ -152,35 +166,46 @@ void getlit(float x, float y, float z, int side) {
   //send color info to DMX lights:
   lamp_color(newcolor[0],newcolor[1],newcolor[2],side);
   //calculate and send brightness value. press hard for strobe time
+  int bright = 0;
   if(z<500){
-    int bright = brightness(dist);
+    bright = brightness(dist);
     lamp_mode(bright,side);
   }else{
-    int blinktime = strobe(z);
-    SenselDebugSerial.print("blinktime: ");
-    SenselDebugSerial.print(blinktime);
-    SenselDebugSerial.println(" ");
-    lamp_mode(blinktime,side);
+    bright = strobe(z);
+    lamp_mode(bright,side);
+  }
+  //record to scene:
+  record_scene(newcolor[0],newcolor[1],newcolor[2],bright,side);
+}
+
+void record_scene(int r, int g, int b, int v, int s) {
+  if(recording && framecount < max_frames){
+    unsigned long cur_ms = millis();
+    if (cur_ms - pvs_ms >= interval) {
+      // save the last time we marked a frame
+      pvs_ms = cur_ms;
+      // store to buffer
+      scene_buffer[framecount][0] = r;
+      scene_buffer[framecount][1] = g;
+      scene_buffer[framecount][2] = b;
+      scene_buffer[framecount][3] = v;
+      scene_buffer[framecount][4] = s;
+    }
+    framecount ++;
   }
 }
 
 //apply contacts to DMX
 void senselParseFrame(SenselFrame *frame){
-     for(int i = 0; i < frame->n_contacts; i++){
-      float dist = 0;
+    int num_contacts = frame->n_contacts
+     for(int i = 0; i < num_contacts; i++){
       int id = frame->contacts[i].id;
       float x = frame->contacts[i].x_pos;
       float y = frame->contacts[i].y_pos;
       float force = frame->contacts[i].total_force;
       int side = 0;
-      int bright = 0;
-      int seg_id_next = 0;
       //left side.
       if(x<120 && y<120){
-//    SenselDebugSerial.println(" ");
-//    SenselDebugSerial.print("force: ");
-//    SenselDebugSerial.print(force);
-//    SenselDebugSerial.println(" ");
         side = 0;
         getlit(x,y,force,side);
       }
@@ -189,11 +214,27 @@ void senselParseFrame(SenselFrame *frame){
         side = 1;        
         getlit(x,y,force,side);
       }
-      if(x>120 && y>120){
-        //bottom right
+      //bottom left left
+      if(x<60 && y>120){
+        //recording button. Need to know how to detect a new contact in this area!
+        if(num_contacts>1){
+          if(recording==0){
+            framecount = 0;
+          }
+          recording = 1;
+        }
       }
-      if(x<120 && y>120){
-        //bottom left
+        //bottom left right
+      if( (x>60 && x<120) && y>120 ){
+        
+      }
+        //bottom right left
+      if( (x>120 && x<180) && y>120){
+        
+      }
+        //bottom right right
+      if( (x>180) && y>120){
+        
       }
     }
   
