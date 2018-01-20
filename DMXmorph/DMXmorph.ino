@@ -51,6 +51,17 @@ float interpolation = 0.;
 int seg_id = 0;
 int newcolor[3] = {0,0,0};
 
+//areas and boundaries
+float h_center = 120.0;
+float v_center = 70.0;
+//top left, bottom right coords:
+float left_wheel[4]  =    {0.0  , 0.0  , 120.0, 120.0};
+float right_wheel[4] =    {120.0, 0.0  , 240.0, 120.0};
+float btn_rec_left[4] =   {0.0  , 125.0, 60.0 , 140.0};
+float btn_play_left[4] =  {60.0 , 125.0, 120.0, 140.0};
+float btn_rec_right[4] =  {120.0, 125.0, 180.0, 140.0};
+float btn_play_right[4] = {180.0, 125.0, 240.0, 140.0};
+
 //for scene recording and playback
 const int max_frames = 150; //number of events to record
 const long interval = 33; // interval at which to record and play scenes (milliseconds)
@@ -60,8 +71,6 @@ int framecount = 0;
 int scene_buffer[max_frames][5] = {}; //maximum of 150 events to record into scene
 int scene_start = 0; //
 int scene_end = max_frames;
-
-
 
 //takes coordinates from morph, 
 //provides a radial segment ID (angle in range of 0-15)
@@ -197,7 +206,7 @@ void record_scene(int r, int g, int b, int v, int s) {
 
 //apply contacts to DMX
 void senselParseFrame(SenselFrame *frame){
-    int num_contacts = frame->n_contacts
+    int num_contacts = frame->n_contacts;
      for(int i = 0; i < num_contacts; i++){
       int id = frame->contacts[i].id;
       float x = frame->contacts[i].x_pos;
@@ -205,36 +214,43 @@ void senselParseFrame(SenselFrame *frame){
       float force = frame->contacts[i].total_force;
       int side = 0;
       //left side.
-      if(x<120 && y<120){
+      
+      if( (x>left_wheel[0] && x<left_wheel[2]) && (y>left_wheel[1] && y<left_wheel[3]){
         side = 0;
         getlit(x,y,force,side);
       }
       //right side
-      if(x>120 && y<120){
+      if( (x>right_wheel[0] && x<right_wheel[2]) && (y>right_wheel[1] && y<right_wheel[3]){
         side = 1;        
         getlit(x,y,force,side);
       }
       //bottom left left
-      if(x<60 && y>120){
-        //recording button. Need to know how to detect a new contact in this area!
-        if(num_contacts>1){
+      if( (x>btn_rec_left[0] && x<btn_rec_left[2]) && (y>btn_rec_left[1] && y<btn_rec_left[3]){
+        //"type". 1=Start (new contact), 2 = Move (contact data is being updated), 3 = End (contact is no longer there)
+        //recording button
+        if (frame->contacts[i].type==1)
+        {
           if(recording==0){
             framecount = 0;
           }
           recording = 1;
         }
+        if (frame->contacts[i].type==3)
+        {
+          recording = 0;
+        }
       }
         //bottom left right
-      if( (x>60 && x<120) && y>120 ){
-        
+      if( (x>btn_play_left[0] && x<btn_play_left[2]) && (y>btn_play_left[1] && y<btn_play_left[3]){
+        //play left scene
       }
         //bottom right left
-      if( (x>120 && x<180) && y>120){
-        
+      if( (x>btn_rec_right[0] && x<btn_rec_right[2]) && (y>btn_rec_right[1] && y<btn_rec_right[3]){
+        //rec right scene
       }
         //bottom right right
-      if( (x>180) && y>120){
-        
+      if( (x>btn_play_right[0] && x<btn_play_right[2]) && (y>btn_play_right[1] && y<btn_play_right[3]){
+        //play right scene
       }
     }
   
